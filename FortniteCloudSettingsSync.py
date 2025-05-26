@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-Fortnite Cloud Settings Sync Tool
-Download and upload ClientSettings.sav and related files to/from Epic Games cloud storage
+Fortnite Cloud Settings Sync Tool - GUI Version
+Download and upload ClientSettings.sav to/from Epic Games cloud storage
 """
 
 import wx
-import wx.grid
 import requests
 import json
 import base64
@@ -360,16 +359,12 @@ class FortniteCloudApp(wx.Frame):
         self.filter_check.Bind(wx.EVT_CHECKBOX, self.on_filter_toggle)
         filter_sizer.Add(self.filter_check, 0, wx.ALIGN_LEFT)
         
-        # Create grid for file listing
-        self.files_grid = wx.grid.Grid(panel)
-        self.files_grid.CreateGrid(0, 3)
-        self.files_grid.SetColLabelValue(0, "Filename")
-        self.files_grid.SetColLabelValue(1, "Size")
-        self.files_grid.SetColLabelValue(2, "Modified")
-        self.files_grid.SetColSize(0, 400)
-        self.files_grid.SetColSize(1, 100)
-        self.files_grid.SetColSize(2, 200)
-        self.files_grid.Bind(wx.grid.EVT_GRID_SELECT_CELL, self.on_grid_select)
+        # Create list for file listing
+        self.files_list = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+        self.files_list.InsertColumn(0, "Filename", width=400)
+        self.files_list.InsertColumn(1, "Size", width=100)
+        self.files_list.InsertColumn(2, "Modified", width=200)
+        self.files_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_list_select)
         
         # Buttons for file operations
         file_buttons = wx.BoxSizer(wx.HORIZONTAL)
@@ -401,7 +396,7 @@ class FortniteCloudApp(wx.Frame):
         file_buttons.Add(self.delete_btn, 0)
         
         files_sizer.Add(filter_sizer, 0, wx.ALL|wx.EXPAND, 5)
-        files_sizer.Add(self.files_grid, 1, wx.ALL|wx.EXPAND, 5)
+        files_sizer.Add(self.files_list, 1, wx.ALL|wx.EXPAND, 5)
         files_sizer.Add(file_buttons, 0, wx.ALL|wx.ALIGN_RIGHT, 5)
         
         # Status area
@@ -539,11 +534,11 @@ class FortniteCloudApp(wx.Frame):
         
         if success and files:
             self.cloud_files = files
-            self.update_files_grid(files)
+            self.update_files_list(files)
             self.download_all_btn.Enable()
         else:
             self.cloud_files = []
-            self.update_files_grid([])
+            self.update_files_list([])
             self.download_btn.Disable()
             self.download_all_btn.Disable()
             self.delete_btn.Disable()
@@ -572,15 +567,12 @@ class FortniteCloudApp(wx.Frame):
                 # If parsing fails, return the original string
                 return date_str
     
-    def update_files_grid(self, files):
-        """Update the files grid with the latest data"""
+    def update_files_list(self, files):
+        """Update the files list with the latest data"""
         # Clear existing data
-        if self.files_grid.GetNumberRows() > 0:
-            self.files_grid.DeleteRows(0, self.files_grid.GetNumberRows())
+        self.files_list.DeleteAllItems()
         
-        # Add new rows
-        self.files_grid.AppendRows(len(files))
-        
+        # Add new items
         for i, file_info in enumerate(files):
             filename = file_info.get('uniqueFilename', 'Unknown')
             size = file_info.get('length', 0)
@@ -607,26 +599,25 @@ class FortniteCloudApp(wx.Frame):
             # Format date
             date_str = self.format_date(modified)
             
-            self.files_grid.SetCellValue(i, 0, filename)
-            self.files_grid.SetCellValue(i, 1, size_str)
-            self.files_grid.SetCellValue(i, 2, date_str)
-        
-        self.files_grid.AutoSize()
+            # Insert item and set column values
+            index = self.files_list.InsertItem(i, filename)
+            self.files_list.SetItem(index, 1, size_str)
+            self.files_list.SetItem(index, 2, date_str)
     
-    def on_grid_select(self, event):
-        """Handle grid cell selection"""
+    def on_list_select(self, event):
+        """Handle list item selection"""
         self.download_btn.Enable(True)
         self.delete_btn.Enable(True)
         event.Skip()
     
     def on_download(self, event):
         """Download the selected file"""
-        row = self.files_grid.GetGridCursorRow()
-        if row < 0 or row >= len(self.cloud_files):
+        selected = self.files_list.GetFirstSelected()
+        if selected < 0 or selected >= len(self.cloud_files):
             self.log_status("❌ No file selected")
             return
         
-        file_info = self.cloud_files[row]
+        file_info = self.cloud_files[selected]
         filename = file_info.get('uniqueFilename', 'Unknown')
         
         # Ask for save location
@@ -766,12 +757,12 @@ class FortniteCloudApp(wx.Frame):
     
     def on_delete(self, event):
         """Delete the selected file from cloud storage"""
-        row = self.files_grid.GetGridCursorRow()
-        if row < 0 or row >= len(self.cloud_files):
+        selected = self.files_list.GetFirstSelected()
+        if selected < 0 or selected >= len(self.cloud_files):
             self.log_status("❌ No file selected")
             return
         
-        file_info = self.cloud_files[row]
+        file_info = self.cloud_files[selected]
         filename = file_info.get('uniqueFilename', 'Unknown')
         
         # Check if file is allowed to be deleted
